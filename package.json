@@ -1,0 +1,22 @@
+{
+  "name": "pharos-faucet-sender",
+  "version": "1.0.0",
+  "description": "Script to send tokens to multiple random addresses on Pharos Network testnet",
+  "main": "send_faucet.js",
+  "scripts": {
+    "start": "node send_faucet.js"
+  },
+  "keywords": [
+    "pharos",
+    "blockchain",
+    "faucet",
+    "web3",
+    "ethereum"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "ethers": "^5.7.2"
+  }
+} 
