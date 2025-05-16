@@ -1,8 +1,6 @@
 # Pharos Network Token Faucet Script
 
 ![Pharos](https://img.shields.io/badge/network-Pharos-blue)
-![License](https://img.shields.io/github/license/your-username/pharos-faucet-sender)
-
 Script to send PHRS tokens to multiple random addresses on the Pharos Network testnet.
 
 ## Features
