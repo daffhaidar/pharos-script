@@ -23,7 +23,7 @@ npm install
 
 ## Usage
 
-1. Open `send_faucet.js` and replace `'YOUR_PRIVATE_KEY_HERE'` with your actual private key (without the '0x' prefix)
+1. Open `send_faucet.js` and replace `'YOUR PRIVATE KEY'` with your actual private key (without the '0x' prefix)
 2. Optionally adjust the `AMOUNT_TO_SEND` value (default is 0.001 PHRS per address)
 3. Run the script:
 
