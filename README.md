@@ -17,7 +17,7 @@ Clone the repository and install dependencies:
 
 ```bash
 git clone https://github.com/your-username/pharos-faucet-sender.git
-cd pharos-faucet-sender
+cd pharos-script
 npm install
 ```
 
