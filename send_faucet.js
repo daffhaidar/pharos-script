@@ -8,32 +8,44 @@ try {
 }
 
 // Pharos testnet RPC URL
-const RPC_URL = process.env.RPC_URL || "https://testnet.dplabs-internal.com";
+const RPC_URL = process.env.RPC_URL || "https://api.zan.top/node/v1/pharos/testnet/1761472bf26745488907477d23719fb5";
 
-// Masukin di bawah private key lu ea
-const SENDER_PRIVATE_KEY = process.env.PRIVATE_KEY || "YOUR PRIVATE KEY";
+// Get private keys from .env file
+// Format in .env should be: PRIVATE_KEY_1=your_key_1, PRIVATE_KEY_2=your_key_2, etc.
+const PRIVATE_KEYS = Object.keys(process.env)
+  .filter((key) => key.startsWith("PRIVATE_KEY_"))
+  .map((key) => process.env[key]);
+
+if (PRIVATE_KEYS.length === 0) {
+  console.error("No private keys found in .env file. Please add PRIVATE_KEY_1, PRIVATE_KEY_2, etc.");
+  process.exit(1);
+}
 
 // Amount of PHRS to send to each address
-const AMOUNT_TO_SEND = process.env.AMOUNT_TO_SEND || "0.001";
+const AMOUNT_TO_SEND = "0.0021";
 
-// Connect to Pharos testnet
+// Connect to Pharos testnet with chain ID
 const provider = new ethers.providers.JsonRpcProvider(RPC_URL);
-const wallet = new ethers.Wallet(SENDER_PRIVATE_KEY, provider);
+provider.getNetwork().then((network) => {
+  if (network.chainId !== CHAIN_ID) {
+    console.error(`Warning: Connected to chain ID ${network.chainId}, expected ${CHAIN_ID}`);
+  }
+});
 
 // Helper function to sleep for a given time
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Helper function to get a random delay between 2-6 minutes
+// Helper function to get a random delay between 5-10 minutes
 function getRandomDelay() {
-  // Random minutes between 2 and 6
-  const minutes = Math.floor(Math.random() * 4) + 2;
+  // Random minutes between 5 and 10
+  const minutes = Math.floor(Math.random() * 5) + 5;
   // Convert to milliseconds
   return minutes * 60 * 1000;
 }
 
-// Generate 11 random addresses
+// Generate random addresses
 function generateRandomAddresses(count) {
   const addresses = [];
   for (let i = 0; i < count; i++) {
@@ -43,11 +55,12 @@ function generateRandomAddresses(count) {
   return addresses;
 }
 
-// Send PHRS tokens to addresses
-async function sendTokens(addresses) {
+// Send PHRS tokens to addresses using a specific wallet
+async function sendTokens(addresses, privateKey) {
+  const wallet = new ethers.Wallet(privateKey, provider);
   const valueToSend = ethers.utils.parseEther(AMOUNT_TO_SEND);
 
-  console.log(`Sender address: ${wallet.address}`);
+  console.log(`\nUsing sender address: ${wallet.address}`);
 
   // Get current balance
   const balance = await provider.getBalance(wallet.address);
@@ -56,8 +69,8 @@ async function sendTokens(addresses) {
   // Check if we have enough balance
   const requiredBalance = valueToSend.mul(addresses.length);
   if (balance.lt(requiredBalance)) {
-    console.error(`Not enough balance. Need at least ${ethers.utils.formatEther(requiredBalance)} PHRS`);
-    return;
+    console.error(`Not enough balance for wallet ${wallet.address}. Need at least ${ethers.utils.formatEther(requiredBalance)} PHRS`);
+    return false;
   }
 
   // Send transactions in sequence to avoid nonce issues
@@ -78,46 +91,54 @@ async function sendTokens(addresses) {
       await transaction.wait();
       console.log(`Transaction confirmed!`);
 
-      // Add a small random delay between transactions within the same batch (5-15 seconds)
-      const smallDelay = (Math.floor(Math.random() * 10) + 5) * 1000;
-      console.log(`Waiting ${smallDelay / 1000} seconds before next transaction...`);
-      await sleep(smallDelay);
+      // Fixed delay of 61 seconds between transactions
+      console.log(`Waiting 61 seconds before next transaction...`);
+      await sleep(61000);
     } catch (error) {
       console.error(`Error sending to ${address}:`, error.message);
+      return false;
     }
   }
+  return true;
 }
 
 // Main function
 async function main() {
   try {
-    // Generate 11 random addresses
-    const allAddresses = generateRandomAddresses(11);
+    // Generate random addresses (51 addresses)
+    const allAddresses = generateRandomAddresses(51);
     console.log("Generated addresses:", allAddresses);
 
-    // Send to 5 addresses at a time
-    const batch1 = allAddresses.slice(0, 5);
-    const batch2 = allAddresses.slice(5, 10);
-    const batch3 = allAddresses.slice(10); // Just one address
+    // Split addresses into batches based on number of private keys
+    const batches = [];
+    const addressesPerBatch = Math.ceil(allAddresses.length / PRIVATE_KEYS.length);
 
-    console.log("\nSending to batch 1:");
-    await sendTokens(batch1);
+    for (let i = 0; i < allAddresses.length; i += addressesPerBatch) {
+      batches.push(allAddresses.slice(i, i + addressesPerBatch));
+    }
 
-    // Random delay between batches (2-6 minutes)
-    const delay1 = getRandomDelay();
-    console.log(`\nWaiting ${Math.floor(delay1 / 60000)} minutes and ${Math.floor((delay1 % 60000) / 1000)} seconds before processing batch 2...`);
-    await sleep(delay1);
+    // Process each batch with a different private key
+    for (let i = 0; i < batches.length; i++) {
+      if (i >= PRIVATE_KEYS.length) {
+        console.error("Not enough private keys for all batches");
+        break;
+      }
 
-    console.log("\nSending to batch 2:");
-    await sendTokens(batch2);
+      console.log(`\nProcessing batch ${i + 1} with wallet ${i + 1}:`);
+      const success = await sendTokens(batches[i], PRIVATE_KEYS[i]);
 
-    // Random delay between batches (2-6 minutes)
-    const delay2 = getRandomDelay();
-    console.log(`\nWaiting ${Math.floor(delay2 / 60000)} minutes and ${Math.floor((delay2 % 60000) / 1000)} seconds before processing batch 3...`);
-    await sleep(delay2);
+      if (!success) {
+        console.error(`Failed to process batch ${i + 1}`);
+        continue;
+      }
 
-    console.log("\nSending to batch 3:");
-    await sendTokens(batch3);
+      // Add delay between batches if not the last batch
+      if (i < batches.length - 1) {
+        const delay = getRandomDelay();
+        console.log(`\nWaiting ${Math.floor(delay / 60000)} minutes and ${Math.floor((delay % 60000) / 1000)} seconds before next batch...`);
+        await sleep(delay);
+      }
+    }
 
     console.log("\nAll PHRS tokens sent successfully!");
   } catch (error) {
