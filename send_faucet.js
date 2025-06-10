@@ -1,14 +1,19 @@
 // Script to send PHRS tokens to random accounts on Pharos Network
 const { ethers } = require("ethers");
-// Try to load dotenv if available
-try {
-  require("dotenv").config();
-} catch (error) {
-  // dotenv not installed, using direct config
-}
+require("dotenv").config();
 
-// Pharos testnet RPC URL
-const RPC_URL = process.env.RPC_URL || "https://api.zan.top/node/v1/pharos/testnet/1761472bf26745488907477d23719fb5";
+/*
+Network Information:
+Network Name: Pharos Testnet
+Chain ID: 688688
+RPC URL: https://testnet.dplabs-internal.com
+Block Explorer: https://testnet.pharosscan.xyz
+Currency Symbol: PHRS
+*/
+
+// Pharos testnet configuration
+const RPC_URL = process.env.RPC_URL || "https://testnet.dplabs-internal.com";
+const CHAIN_ID = 688688;
 
 // Get private keys from .env file
 // Format in .env should be: PRIVATE_KEY_1=your_key_1, PRIVATE_KEY_2=your_key_2, etc.
