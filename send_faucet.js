@@ -8,7 +8,7 @@ try {
 }
 
 // Pharos testnet RPC URL
-const RPC_URL = process.env.RPC_URL || "https://api.zan.top/node/v1/pharos/testnet/1761472bf26745488907477d23719fb5";
+const RPC_URL = process.env.RPC_URL || "https://testnet.dplabs-internal.com";
 
 // Get private keys from .env file
 // Format in .env should be: PRIVATE_KEY_1=your_key_1, PRIVATE_KEY_2=your_key_2, etc.
