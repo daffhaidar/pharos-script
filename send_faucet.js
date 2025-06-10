@@ -8,7 +8,7 @@ try {
 }
 
 // Pharos testnet RPC URL
-const RPC_URL = process.env.RPC_URL || "https://api.zan.top/node/v1/pharos/testnet/1761472bf26745488907477d23719fb5";
+const RPC_URL = process.env.RPC_URL || "https://testnet.dplabs-internal.com";
 
 // Masukin di bawah private key lu ea
 const SENDER_PRIVATE_KEY = process.env.PRIVATE_KEY || "YOUR PRIVATE KEY";
