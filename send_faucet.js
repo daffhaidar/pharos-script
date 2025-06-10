@@ -2,6 +2,7 @@
 const { ethers } = require("ethers");
 require("dotenv").config();
 
+<<<<<<< HEAD
 /*
 Network Information:
 Network Name: Pharos Testnet
@@ -14,6 +15,10 @@ Currency Symbol: PHRS
 // Pharos testnet configuration
 const RPC_URL = process.env.RPC_URL || "https://testnet.dplabs-internal.com";
 const CHAIN_ID = 688688;
+=======
+// Pharos testnet RPC URL
+const RPC_URL = process.env.RPC_URL || "https://testnet.dplabs-internal.com";
+>>>>>>> 7cdefa4973a07fec9ec11c2f59d96570b4df508b
 
 // Get private keys from .env file
 // Format in .env should be: PRIVATE_KEY_1=your_key_1, PRIVATE_KEY_2=your_key_2, etc.
