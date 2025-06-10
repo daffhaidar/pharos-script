@@ -1,38 +1,39 @@
 # Pharos Network Token Faucet Script
 
-![Pharos](https://img.shields.io/badge/network-Pharos-blue)
-Script to send PHRS tokens to multiple random addresses on the Pharos Network testnet.
+Script to send PHRS tokens to multiple random addresses on Pharos Network testnet.
 
 ## Features
 
-- Generates 11 random valid Ethereum addresses
-- Sends PHRS tokens in batches (5 + 5 + 1 addresses)
-- Checks sender balance before transactions
-- Handles nonce management automatically
-- Confirms transactions and shows transaction hashes
+* Supports multiple private keys (unlimited)
+* Generates 51 random valid Ethereum addresses
+* Sends PHRS tokens in batches
+* Checks sender balance before transactions
+* Handles nonce management automatically
+* Confirms transactions and shows transaction hashes
+* 61 seconds delay between transactions
+* Random 5-10 minutes delay between batches
 
 ## Installation
 
-Clone the repository and install dependencies:
+Clone repository and install dependencies:
 
 ```bash
-git clone https://github.com/your-username/pharos-faucet-sender.git
+git clone https://github.com/daffhaidar/pharos-script.git
 cd pharos-script
 npm install
 ```
 
 ## Usage
 
-1. Open `send_faucet.js` and replace `'YOUR PRIVATE KEY'` with your actual private key (without the '0x' prefix)
-2. Optionally adjust the `AMOUNT_TO_SEND` value (default is 0.001 PHRS per address)
-3. Run the script:
-
-```bash
-npm start
+1. Create `.env` file and add your private keys:
+```
+PRIVATE_KEY_1=your_first_private_key
+PRIVATE_KEY_2=your_second_private_key
+PRIVATE_KEY_3=your_third_private_key
+# Add as many private keys as you want
 ```
 
-Or directly with Node:
-
+2. Run the script:
 ```bash
 node send_faucet.js
 ```
@@ -41,23 +42,22 @@ node send_faucet.js
 
 The script performs the following actions:
 
-1. Connects to Pharos Network testnet using the RPC URL: `https://api.zan.top/node/v1/pharos/testnet/1761472bf26745488907477d23719fb5`
-2. Generates 11 random valid Ethereum addresses
-3. Splits these addresses into 3 batches (5 + 5 + 1)
-4. Sends 0.001 PHRS tokens to each address in sequence
-5. Outputs transaction hashes and confirmations
+1. Connects to Pharos Network testnet using RPC URL: `https://testnet.dplabs-internal.com`
+2. Generates 51 random valid Ethereum addresses
+3. Splits addresses into batches based on available private keys
+4. Sends 0.0021 PHRS tokens to each address in sequence
+5. Shows transaction hash and confirmation
 
 ## Security Note
 
-⚠️ **IMPORTANT**: Never share or commit your private keys. The script is set up to read your private key from a variable that you need to manually set before running the script.
-
-Consider storing your private key in an environment variable or using a .env file with dotenv for better security.
+⚠️ **IMPORTANT**: Never share or commit your private keys. The script is set up to read private keys from `.env` file.
 
 ## Troubleshooting
 
-- If you encounter RPC errors, try reducing the transaction speed or adding more delay between transactions
-- Make sure your sending address has enough PHRS tokens to cover all the transactions plus gas fees
+* If you encounter RPC errors, make sure you're connected to the internet
+* Ensure the sender address has enough PHRS tokens to cover all transactions plus gas fees
+* Make sure the private keys used are valid and have sufficient balance
 
 ## License
 
-[MIT](LICENSE)
+MIT
