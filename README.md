@@ -27,7 +27,7 @@ This script has evolved from a simple faucet into a powerful, all-in-one automat
 
 1.  **Install dependencies**:
     ```bash
-    git clone github.com/daffhaidar/pharos-script
+    git clone https://github.com/daffhaidar/pharos-script.git
     cd pharos-script
     npm install
     ```
