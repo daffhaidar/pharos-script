@@ -1,169 +1,254 @@
-// Script to send PHRS tokens to random accounts on Pharos Network
+// Script to perform sequential swaps and batch transfers on Pharos Network
 const { ethers } = require("ethers");
 require("dotenv").config();
 
-/*
-Network Information:
-Network Name: Pharos Testnet
-Chain ID: 688688
-RPC URL: https://testnet.dplabs-internal.com
-Block Explorer: https://testnet.pharosscan.xyz
-Currency Symbol: PHRS
-*/
+// ===================================================================================
+// --- CONFIGURATION ---
+// All settings are managed here.
+// ===================================================================================
+const config = {
+    network: {
+        rpc: "https://testnet.dplabs-internal.com",
+        chainId: 688688,
+        name: "Pharos Testnet",
+        explorer: "https://testnet.pharosscan.xyz/tx/",
+    },
+    contracts: {
+        usdc: "0xad902cf99c2de2f1ba5ec4d642fd7e49cae9ee37",
+        usdt: "0xed59de2d7ad9c043442e381231ee3646fc3c2939",
+        wphrs: "0x76aaada469d23216be5f7c596fa25f282ff9b364",
+        router: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+    },
+    // Define the sequence of operations for the bot
+    sequence: [
+        { type: 'swap', from: 'phrs', to: 'usdt' },
+        { type: 'swap', from: 'phrs', to: 'usdc' },
+        { type: 'transfer_batch', count: 51 }, // This step will send PHRS to 51 random addresses
+        { type: 'swap', from: 'usdt', to: 'usdc' },
+        { type: 'swap', from: 'usdc', to: 'usdt' },
+    ],
+    // Settings for amounts and delays
+    transactions: {
+        amountRange: { min: 0.0012, max: 0.0025 },
+        slippage: 0.05
+    },
+    delay: {
+        betweenCyclesMinutes: { min: 5, max: 11 },
+        betweenTransactionsSeconds: { min: 42, max: 63 }
+    },
+    gas: {
+        gasLimit: 500000,
+    },
+};
 
-// Pharos testnet configuration
-const RPC_URL = process.env.RPC_URL || "https://testnet.dplabs-internal.com";
-const CHAIN_ID = 688688;
+// ===================================================================================
+// --- CONTRACT ABIs ---
+// ===================================================================================
+const ERC20_ABI = [ 'function balanceOf(address owner) view returns (uint256)', 'function approve(address spender, uint256 amount) returns (bool)', 'function allowance(address owner, address spender) view returns (uint256)', 'function decimals() view returns (uint8)', 'function symbol() view returns (string)' ];
+const ROUTER_ABI = [ 'function WETH() external pure returns (address)', 'function getAmountsOut(uint amountIn, address[] memory path) external view returns (uint[] memory amounts)', 'function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)', 'function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)' ];
 
-// Get private keys from .env file
-// Format in .env should be: PRIVATE_KEY_1=your_key_1, PRIVATE_KEY_2=your_key_2, etc.
-const PRIVATE_KEYS = Object.keys(process.env)
-  .filter((key) => key.startsWith("PRIVATE_KEY_"))
-  .map((key) => process.env[key]);
+// ===================================================================================
+// --- HELPER FUNCTIONS ---
+// ===================================================================================
+const randomDelay = (minSeconds, maxSeconds) => {
+    const delay = minSeconds + Math.random() * (maxSeconds - minSeconds);
+    console.log(`[INFO] Waiting for ${delay.toFixed(2)} seconds...`);
+    return new Promise(resolve => setTimeout(resolve, delay * 1000));
+};
 
-if (PRIVATE_KEYS.length === 0) {
-  console.error("No private keys found in .env file. Please add PRIVATE_KEY_1, PRIVATE_KEY_2, etc.");
-  process.exit(1);
-}
-
-// Helper function to get random amount between 0.0012 and 0.0023
-function getRandomAmount() {
-  const min = 0.0012;
-  const max = 0.0023;
-  return (Math.random() * (max - min) + min).toFixed(4);
-}
-
-// Helper function to sleep for a given time
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// Helper function to get a random delay between 5-10 minutes
-function getRandomDelay() {
-  // Random minutes between 5 and 10
-  const minutes = Math.floor(Math.random() * 5) + 5;
-  // Convert to milliseconds
-  return minutes * 60 * 1000;
-}
-
-// Helper function to get random delay between 31-61 seconds
-function getRandomTransactionDelay() {
-  // Random seconds between 31 and 61
-  const seconds = Math.floor(Math.random() * 30) + 31;
-  // Convert to milliseconds
-  return seconds * 1000;
-}
-
-// Connect to Pharos testnet with chain ID
-const provider = new ethers.providers.JsonRpcProvider(RPC_URL);
-provider.getNetwork().then((network) => {
-  if (network.chainId !== CHAIN_ID) {
-    console.error(`Warning: Connected to chain ID ${network.chainId}, expected ${CHAIN_ID}`);
-  }
-});
-
-// Generate random addresses
-function generateRandomAddresses(count) {
-  const addresses = [];
-  for (let i = 0; i < count; i++) {
-    const randomWallet = ethers.Wallet.createRandom();
-    addresses.push(randomWallet.address);
-  }
-  return addresses;
-}
-
-// Send PHRS tokens to addresses using a specific wallet
-async function sendTokens(addresses, privateKey) {
-  const wallet = new ethers.Wallet(privateKey, provider);
-
-  console.log(`\nUsing sender address: ${wallet.address}`);
-
-  // Get current balance
-  const balance = await provider.getBalance(wallet.address);
-  console.log(`Current balance: ${ethers.utils.formatEther(balance)} PHRS`);
-
-  // Check if we have enough balance (using max amount to be safe)
-  const maxAmount = ethers.utils.parseEther("0.0023");
-  const requiredBalance = maxAmount.mul(addresses.length);
-  if (balance.lt(requiredBalance)) {
-    console.error(`Not enough balance for wallet ${wallet.address}. Need at least ${ethers.utils.formatEther(requiredBalance)} PHRS`);
-    return false;
-  }
-
-  // Send transactions in sequence to avoid nonce issues
-  let nonce = await provider.getTransactionCount(wallet.address);
-
-  for (const address of addresses) {
-    const randomAmount = getRandomAmount();
-    const valueToSend = ethers.utils.parseEther(randomAmount);
-    console.log(`Sending ${randomAmount} PHRS to ${address}...`);
-
-    const tx = {
-      to: address,
-      value: valueToSend,
-      nonce: nonce++,
-    };
-
-    try {
-      const transaction = await wallet.sendTransaction(tx);
-      console.log(`Transaction hash: ${transaction.hash}`);
-      await transaction.wait();
-      console.log(`Transaction confirmed!`);
-
-      // Random delay between 31-61 seconds between transactions
-      const delay = getRandomTransactionDelay();
-      console.log(`Waiting ${Math.floor(delay / 1000)} seconds before next transaction...`);
-      await sleep(delay);
-    } catch (error) {
-      console.error(`Error sending to ${address}:`, error.message);
-      return false;
+const countdown = async (minutes) => {
+    let totalSeconds = Math.round(minutes * 60);
+    console.log(`\n[INFO] Cycle complete. Bot will restart in ${minutes.toFixed(2)} minutes...`);
+    while (totalSeconds > 0) {
+        process.stdout.write(`\r[INFO] Time until next cycle: ${Math.floor(totalSeconds / 60)}m ${totalSeconds % 60}s   `);
+        totalSeconds--;
+        await new Promise(resolve => setTimeout(resolve, 1000));
     }
-  }
-  return true;
+    process.stdout.write('\n[INFO] Starting new cycle!\n');
+};
+
+// ===================================================================================
+// --- BOT LOGIC (CLASS-BASED) ---
+// ===================================================================================
+class Bot {
+    constructor(privateKey, provider) {
+        this.provider = provider;
+        this.wallet = new ethers.Wallet(privateKey, this.provider);
+        this.router = new ethers.Contract(config.contracts.router, ROUTER_ABI, this.wallet);
+        this.tokenContracts = {
+            'usdc': new ethers.Contract(config.contracts.usdc, ERC20_ABI, this.wallet),
+            'usdt': new ethers.Contract(config.contracts.usdt, ERC20_ABI, this.wallet),
+            'wphrs': new ethers.Contract(config.contracts.wphrs, ERC20_ABI, this.wallet)
+        };
+        console.log(`[INFO] Bot initialized for address: ${this.wallet.address}`);
+    }
+
+    async run() {
+        console.log(`\n--- [${this.wallet.address}] Starting Operations ---`);
+        let initialBalances = await this.getBalances();
+        if (initialBalances) console.log(`[INFO] Initial balances: ${initialBalances.native} PHRS, ${initialBalances.usdc} USDC, ${initialBalances.usdt} USDT`);
+
+        const { sequence } = config;
+        const { min, max } = config.delay.betweenTransactionsSeconds;
+
+        for (let i = 0; i < sequence.length; i++) {
+            const step = sequence[i];
+            console.log(`\n--- [${this.wallet.address}] Step ${i + 1}/${sequence.length}: ${step.type.toUpperCase()} ---`);
+            
+            switch (step.type) {
+                case 'swap':
+                    console.log(`[INFO] Pair: ${step.from.toUpperCase()} -> ${step.to.toUpperCase()}`);
+                    if (step.from === 'phrs') await this.swapNativeForToken(step);
+                    else await this.swapTokenForToken(step);
+                    break;
+                case 'transfer_batch':
+                    await this.performBatchTransfer(step);
+                    break;
+                default:
+                    console.warn(`[WARN] Unknown step type: ${step.type}`);
+            }
+
+            if (i < sequence.length - 1) await randomDelay(min, max);
+        }
+
+        console.log(`\n--- [${this.wallet.address}] All tasks completed ---`);
+        let finalBalances = await this.getBalances();
+        if (finalBalances) console.log(`[INFO] Final balances: ${finalBalances.native} PHRS, ${finalBalances.usdc} USDC, ${finalBalances.usdt} USDT`);
+    }
+    
+    // --- Core Action Functions ---
+
+    async performBatchTransfer(step) {
+        const count = step.count || 1;
+        console.log(`[INFO] Starting batch transfer to ${count} random addresses.`);
+        const addresses = Array.from({ length: count }, () => ethers.Wallet.createRandom().address);
+
+        for (let i = 0; i < addresses.length; i++) {
+            const toAddress = addresses[i];
+            const { min, max } = config.transactions.amountRange;
+            const amount = (min + Math.random() * (max - min)).toFixed(8);
+            console.log(`[INFO] Transfer ${i + 1}/${count}: Sending ${amount} PHRS to ${toAddress}`);
+
+            try {
+                const amountIn = ethers.utils.parseEther(amount);
+                const balance = await this.provider.getBalance(this.wallet.address);
+                if (balance.lt(amountIn)) {
+                    console.warn(`[WARN] Insufficient balance for transfer, stopping batch.`);
+                    break;
+                }
+                const tx = await this.wallet.sendTransaction({ to: toAddress, value: amountIn, gasLimit: 21000 });
+                await tx.wait();
+                console.log(`[SUCCESS] Transfer to ${toAddress} confirmed! Hash: ${tx.hash}`);
+                if (i < addresses.length - 1) await randomDelay(config.delay.betweenTransactionsSeconds.min, config.delay.betweenTransactionsSeconds.max);
+            } catch (error) {
+                console.error(`[ERROR] Failed to send to ${toAddress}: ${error.message}`);
+            }
+        }
+    }
+
+    async swapNativeForToken(pair) {
+        const { to } = pair;
+        const { min, max } = config.transactions.amountRange;
+        const amount = (min + Math.random() * (max - min)).toFixed(8);
+        console.log(`[INFO] Attempting swap: ${amount} PHRS -> ${to.toUpperCase()}`);
+        try {
+            const amountIn = ethers.utils.parseEther(amount);
+            const balance = await this.provider.getBalance(this.wallet.address);
+            if (balance.lt(amountIn)) { console.warn(`[WARN] Insufficient PHRS balance for swap.`); return; }
+            const path = [config.contracts.wphrs, config.contracts[to]];
+            const deadline = Math.floor(Date.now() / 1000) + 60 * 5;
+            const swapTx = await this.router.swapExactETHForTokens(0, path, this.wallet.address, deadline, { value: amountIn, gasLimit: config.gas.gasLimit });
+            await swapTx.wait();
+            console.log(`[SUCCESS] Swap successful! Hash: ${swapTx.hash}`);
+        } catch (error) { console.error(`[ERROR] Failed to swap native for token: ${error.message}`); }
+    }
+
+    async swapTokenForToken(pair) {
+        const { from, to } = pair;
+        const { min, max } = config.transactions.amountRange;
+        const amount = (min + Math.random() * (max - min)).toFixed(8);
+        console.log(`[INFO] Attempting swap: ${amount} ${from.toUpperCase()} -> ${to.toUpperCase()}`);
+        try {
+            const isApproved = await this.checkAndApprove(from, amount, config.contracts.router);
+            if (!isApproved) { console.error(`[ERROR] Approval/balance check failed, skipping swap.`); return; }
+            const fromDecimals = await this.tokenContracts[from].decimals();
+            const amountIn = ethers.utils.parseUnits(amount, fromDecimals);
+            const path = [config.contracts[from], config.contracts[to]];
+            const amountsOut = await this.router.getAmountsOut(amountIn, path);
+            const amountOutMin = amountsOut[1].sub(amountsOut[1].mul(Math.floor(config.transactions.slippage * 100)).div(100));
+            const deadline = Math.floor(Date.now() / 1000) + 60 * 5;
+            const swapTx = await this.router.swapExactTokensForTokens(amountIn, amountOutMin, path, this.wallet.address, deadline, { gasLimit: config.gas.gasLimit });
+            await swapTx.wait();
+            console.log(`[SUCCESS] Swap successful! Hash: ${swapTx.hash}`);
+        } catch (error) { console.error(`[ERROR] Failed to perform token swap: ${error.message}`); }
+    }
+
+    // --- Helper methods for the class ---
+    
+    async checkAndApprove(tokenSymbol, amountToApprove, spenderAddress) {
+        const tokenContract = this.tokenContracts[tokenSymbol];
+        if (!tokenContract) { console.error(`[ERROR] Token contract for '${tokenSymbol}' not found.`); return false; }
+        try {
+            const decimals = await tokenContract.decimals();
+            const amountInWei = ethers.utils.parseUnits(amountToApprove, decimals);
+            const balance = await tokenContract.balanceOf(this.wallet.address);
+            if (balance.lt(amountInWei)) { console.warn(`[WARN] Insufficient ${tokenSymbol.toUpperCase()} balance.`); return false; }
+            const allowance = await tokenContract.allowance(this.wallet.address, spenderAddress);
+            if (allowance.lt(amountInWei)) {
+                console.log(`[INFO] Approval needed for ${tokenSymbol.toUpperCase()}. Approving...`);
+                const approveTx = await tokenContract.approve(spenderAddress, ethers.constants.MaxUint256);
+                await approveTx.wait();
+                console.log(`[SUCCESS] ${tokenSymbol.toUpperCase()} approved for spender: ${spenderAddress}`);
+            }
+            return true;
+        } catch (error) { console.error(`[ERROR] Error during check/approve for ${tokenSymbol.toUpperCase()}: ${error.message}`); return false; }
+    }
+
+    async getBalances() {
+        try {
+            const nativeBalance = await this.provider.getBalance(this.wallet.address);
+            const usdcBalance = await this.tokenContracts.usdc.balanceOf(this.wallet.address);
+            const usdtBalance = await this.tokenContracts.usdt.balanceOf(this.wallet.address);
+            const usdcDecimals = await this.tokenContracts.usdc.decimals();
+            const usdtDecimals = await this.tokenContracts.usdt.decimals();
+            return { usdc: ethers.utils.formatUnits(usdcBalance, usdcDecimals), usdt: ethers.utils.formatUnits(usdtBalance, usdtDecimals), native: ethers.utils.formatEther(nativeBalance) };
+        } catch (error) { console.error(`[ERROR] Failed to get balances: ${error.message}`); return null; }
+    }
 }
 
-// Main function
+// ===================================================================================
+// --- MAIN EXECUTION ---
+// ===================================================================================
 async function main() {
-  try {
-    // Generate random addresses (51 addresses)
-    const allAddresses = generateRandomAddresses(51);
-    console.log("Generated addresses:", allAddresses);
-
-    // Split addresses into batches based on number of private keys
-    const batches = [];
-    const addressesPerBatch = Math.ceil(allAddresses.length / PRIVATE_KEYS.length);
-
-    for (let i = 0; i < allAddresses.length; i += addressesPerBatch) {
-      batches.push(allAddresses.slice(i, i + addressesPerBatch));
+    console.log("--- [SYSTEM] Starting Bot ---");
+    const privateKeys = Object.keys(process.env).filter(key => key.startsWith("PRIVATE_KEY_")).map(key => process.env[key]);
+    
+    if (privateKeys.length === 0) {
+        console.error("[FATAL] No private keys found in .env file. Please add PRIVATE_KEY_1, etc.");
+        process.exit(1);
     }
+    
+    console.log(`[INFO] Found ${privateKeys.length} private key(s).`);
+    const provider = new ethers.providers.JsonRpcProvider(config.network.rpc);
 
-    // Process each batch with a different private key
-    for (let i = 0; i < batches.length; i++) {
-      if (i >= PRIVATE_KEYS.length) {
-        console.error("Not enough private keys for all batches");
-        break;
-      }
-
-      console.log(`\nProcessing batch ${i + 1} with wallet ${i + 1}:`);
-      const success = await sendTokens(batches[i], PRIVATE_KEYS[i]);
-
-      if (!success) {
-        console.error(`Failed to process batch ${i + 1}`);
-        continue;
-      }
-
-      // Add delay between batches if not the last batch
-      if (i < batches.length - 1) {
-        const delay = getRandomDelay();
-        console.log(`\nWaiting ${Math.floor(delay / 60000)} minutes and ${Math.floor((delay % 60000) / 1000)} seconds before next batch...`);
-        await sleep(delay);
-      }
+    while (true) {
+        const bots = privateKeys.map(pk => new Bot(pk, provider));
+        for (const bot of bots) {
+            try {
+                await bot.run();
+                console.log("---------------------------------");
+            } catch (error) {
+                console.error(`[FATAL] Unhandled error during bot run for ${bot.wallet.address}: ${error.message}`);
+            }
+        }
+        
+        const { min, max } = config.delay.betweenCyclesMinutes;
+        const delayMinutes = min + Math.random() * (max - min);
+        await countdown(delayMinutes);
     }
-
-    console.log("\nAll PHRS tokens sent successfully!");
-  } catch (error) {
-    console.error("Error in main function:", error);
-  }
 }
 
-main();
+main().catch(error => {
+    console.error("[FATAL] An unexpected error occurred in the main function:", error);
+    process.exit(1);
+});
