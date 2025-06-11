@@ -26,16 +26,12 @@ if (PRIVATE_KEYS.length === 0) {
   process.exit(1);
 }
 
-// Amount of PHRS to send to each address
-const AMOUNT_TO_SEND = "0.0021";
-
-// Connect to Pharos testnet with chain ID
-const provider = new ethers.providers.JsonRpcProvider(RPC_URL);
-provider.getNetwork().then((network) => {
-  if (network.chainId !== CHAIN_ID) {
-    console.error(`Warning: Connected to chain ID ${network.chainId}, expected ${CHAIN_ID}`);
-  }
-});
+// Helper function to get random amount between 0.0012 and 0.0023
+function getRandomAmount() {
+  const min = 0.0012;
+  const max = 0.0023;
+  return (Math.random() * (max - min) + min).toFixed(4);
+}
 
 // Helper function to sleep for a given time
 function sleep(ms) {
@@ -50,6 +46,22 @@ function getRandomDelay() {
   return minutes * 60 * 1000;
 }
 
+// Helper function to get random delay between 31-61 seconds
+function getRandomTransactionDelay() {
+  // Random seconds between 31 and 61
+  const seconds = Math.floor(Math.random() * 30) + 31;
+  // Convert to milliseconds
+  return seconds * 1000;
+}
+
+// Connect to Pharos testnet with chain ID
+const provider = new ethers.providers.JsonRpcProvider(RPC_URL);
+provider.getNetwork().then((network) => {
+  if (network.chainId !== CHAIN_ID) {
+    console.error(`Warning: Connected to chain ID ${network.chainId}, expected ${CHAIN_ID}`);
+  }
+});
+
 // Generate random addresses
 function generateRandomAddresses(count) {
   const addresses = [];
@@ -63,7 +75,6 @@ function generateRandomAddresses(count) {
 // Send PHRS tokens to addresses using a specific wallet
 async function sendTokens(addresses, privateKey) {
   const wallet = new ethers.Wallet(privateKey, provider);
-  const valueToSend = ethers.utils.parseEther(AMOUNT_TO_SEND);
 
   console.log(`\nUsing sender address: ${wallet.address}`);
 
@@ -71,8 +82,9 @@ async function sendTokens(addresses, privateKey) {
   const balance = await provider.getBalance(wallet.address);
   console.log(`Current balance: ${ethers.utils.formatEther(balance)} PHRS`);
 
-  // Check if we have enough balance
-  const requiredBalance = valueToSend.mul(addresses.length);
+  // Check if we have enough balance (using max amount to be safe)
+  const maxAmount = ethers.utils.parseEther("0.0023");
+  const requiredBalance = maxAmount.mul(addresses.length);
   if (balance.lt(requiredBalance)) {
     console.error(`Not enough balance for wallet ${wallet.address}. Need at least ${ethers.utils.formatEther(requiredBalance)} PHRS`);
     return false;
@@ -82,7 +94,9 @@ async function sendTokens(addresses, privateKey) {
   let nonce = await provider.getTransactionCount(wallet.address);
 
   for (const address of addresses) {
-    console.log(`Sending ${AMOUNT_TO_SEND} PHRS to ${address}...`);
+    const randomAmount = getRandomAmount();
+    const valueToSend = ethers.utils.parseEther(randomAmount);
+    console.log(`Sending ${randomAmount} PHRS to ${address}...`);
 
     const tx = {
       to: address,
@@ -96,9 +110,10 @@ async function sendTokens(addresses, privateKey) {
       await transaction.wait();
       console.log(`Transaction confirmed!`);
 
-      // Fixed delay of 61 seconds between transactions
-      console.log(`Waiting 61 seconds before next transaction...`);
-      await sleep(61000);
+      // Random delay between 31-61 seconds between transactions
+      const delay = getRandomTransactionDelay();
+      console.log(`Waiting ${Math.floor(delay / 1000)} seconds before next transaction...`);
+      await sleep(delay);
     } catch (error) {
       console.error(`Error sending to ${address}:`, error.message);
       return false;
