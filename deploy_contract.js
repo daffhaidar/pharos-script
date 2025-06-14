@@ -42,11 +42,21 @@ async function deployContract(wallet) {
 
         // Deploy contract
         console.log(`[INFO] Deploying contract from ${address}...`);
+        console.log(`[INFO] Using playground at https://playground.easy-node.xyz/`);
+        
+        // Get deployment transaction
+        const deployTx = await factory.getDeployTransaction();
+        
+        // Log deployment info
+        console.log(`[INFO] Contract bytecode length: ${deployTx.data.length / 2 - 1} bytes`);
+        console.log(`[INFO] Estimated gas: ${deployTx.gasLimit.toString()}`);
+        
+        // Deploy through playground
         const contract = await factory.deploy();
         
         // Wait for deployment transaction to be mined
         console.log(`[INFO] Waiting for deployment transaction to be mined...`);
-        const deployTx = await contract.deployTransaction.wait();
+        const receipt = await contract.deployTransaction.wait();
         
         // Verify contract is deployed by checking its code
         const provider = wallet.provider;
@@ -60,8 +70,9 @@ async function deployContract(wallet) {
         try {
             await contract.getValue();
             console.log(`[SUCCESS] Contract verified and working at: ${contract.address}`);
-            console.log(`[INFO] Transaction hash: ${deployTx.transactionHash}`);
-            console.log(`[INFO] Block number: ${deployTx.blockNumber}`);
+            console.log(`[INFO] Transaction hash: ${receipt.transactionHash}`);
+            console.log(`[INFO] Block number: ${receipt.blockNumber}`);
+            console.log(`[INFO] Gas used: ${receipt.gasUsed.toString()}`);
             
             // Increment deployment count only after successful verification
             deploymentCounts.set(address, currentCount + 1);

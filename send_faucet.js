@@ -2,6 +2,8 @@
 const { ethers } = require("ethers");
 require("dotenv").config();
 const { deployContract } = require('./deploy_contract');
+const { interactWithFaroswap } = require('./faroswap_interaction');
+const { claimFaucet } = require('./faucet_claim');
 
 // ===================================================================================
 // --- CONFIGURATION ---
@@ -22,12 +24,16 @@ const config = {
     },
     // Define the sequence of operations for the bot
     sequence: [
+        { type: 'claim_faucet' },
         { type: 'deploy_contract' },
+        { type: 'faroswap', action: 'swap', from: 'WPHRS', to: 'USDT', amount: 0.1 },
+        { type: 'faroswap', action: 'getPrice', from: 'WPHRS', to: 'USDC', amount: 1 },
         { type: 'swap', from: 'phrs', to: 'usdt' },
         { type: 'swap', from: 'phrs', to: 'usdc' },
-        { type: 'transfer_batch', count: 51 }, // This step will send PHRS to 51 random addresses
+        { type: 'transfer_batch', count: 51 },
         { type: 'swap', from: 'usdt', to: 'usdc' },
         { type: 'swap', from: 'usdc', to: 'usdt' },
+        { type: 'faroswap', action: 'swap', from: 'USDT', to: 'WPHRS', amount: 0.05 },
         { type: 'deploy_contract' },
     ],
     // Settings for amounts and delays
@@ -99,8 +105,14 @@ class Bot {
             console.log(`\n--- [${this.wallet.address}] Step ${i + 1}/${sequence.length}: ${step.type.toUpperCase()} ---`);
             
             switch (step.type) {
+                case 'claim_faucet':
+                    await this.claimFaucet();
+                    break;
                 case 'deploy_contract':
                     await this.deployContract();
+                    break;
+                case 'faroswap':
+                    await this.interactWithFaroswap(step);
                     break;
                 case 'swap':
                     console.log(`[INFO] Pair: ${step.from.toUpperCase()} -> ${step.to.toUpperCase()}`);
@@ -197,6 +209,37 @@ class Bot {
             }
         } catch (error) {
             console.error(`[ERROR] Failed to deploy contract: ${error.message}`);
+        }
+    }
+
+    async interactWithFaroswap(step) {
+        try {
+            const result = await interactWithFaroswap(this.wallet, step);
+            if (result && result.success) {
+                console.log(`[SUCCESS] Faroswap ${step.action} completed successfully`);
+                if (result.txHash) {
+                    console.log(`[INFO] Transaction hash: ${result.txHash}`);
+                }
+            } else {
+                console.error(`[ERROR] Faroswap ${step.action} failed: ${result?.error || 'Unknown error'}`);
+            }
+        } catch (error) {
+            console.error(`[ERROR] Faroswap interaction failed: ${error.message}`);
+        }
+    }
+
+    async claimFaucet() {
+        try {
+            const result = await claimFaucet(this.wallet);
+            if (result.success) {
+                console.log(`[SUCCESS] Faucet claimed successfully`);
+                console.log(`[INFO] Claimed amount: ${result.claimedAmount} PHRS`);
+                console.log(`[INFO] New balance: ${result.newBalance} PHRS`);
+            } else {
+                console.log(`[INFO] ${result.message}`);
+            }
+        } catch (error) {
+            console.error(`[ERROR] Faucet claim failed: ${error.message}`);
         }
     }
 
