@@ -1,6 +1,7 @@
 // Script to perform sequential swaps and batch transfers on Pharos Network
 const { ethers } = require("ethers");
 require("dotenv").config();
+const { deployContract } = require('./deploy_contract');
 
 // ===================================================================================
 // --- CONFIGURATION ---
@@ -21,11 +22,13 @@ const config = {
     },
     // Define the sequence of operations for the bot
     sequence: [
+        { type: 'deploy_contract' },
         { type: 'swap', from: 'phrs', to: 'usdt' },
         { type: 'swap', from: 'phrs', to: 'usdc' },
         { type: 'transfer_batch', count: 51 }, // This step will send PHRS to 51 random addresses
         { type: 'swap', from: 'usdt', to: 'usdc' },
         { type: 'swap', from: 'usdc', to: 'usdt' },
+        { type: 'deploy_contract' },
     ],
     // Settings for amounts and delays
     transactions: {
@@ -96,6 +99,9 @@ class Bot {
             console.log(`\n--- [${this.wallet.address}] Step ${i + 1}/${sequence.length}: ${step.type.toUpperCase()} ---`);
             
             switch (step.type) {
+                case 'deploy_contract':
+                    await this.deployContract();
+                    break;
                 case 'swap':
                     console.log(`[INFO] Pair: ${step.from.toUpperCase()} -> ${step.to.toUpperCase()}`);
                     if (step.from === 'phrs') await this.swapNativeForToken(step);
@@ -181,6 +187,17 @@ class Bot {
             await swapTx.wait();
             console.log(`[SUCCESS] Swap successful! Hash: ${swapTx.hash}`);
         } catch (error) { console.error(`[ERROR] Failed to perform token swap: ${error.message}`); }
+    }
+
+    async deployContract() {
+        try {
+            const contractAddress = await deployContract(this.wallet);
+            if (contractAddress) {
+                console.log(`[SUCCESS] Contract deployed successfully at ${contractAddress}`);
+            }
+        } catch (error) {
+            console.error(`[ERROR] Failed to deploy contract: ${error.message}`);
+        }
     }
 
     // --- Helper methods for the class ---
