@@ -66,7 +66,7 @@ async function performSwap(router, wallet, action) {
         const amountIn = ethers.utils.parseEther(amount.toString());
         const balance = await fromToken.balanceOf(wallet.address);
         
-        if (balance.lt(amountIn)) {
+        if (balance.toString() === '0') {
             throw new Error(`Insufficient ${from} balance`);
         }
         
@@ -127,8 +127,18 @@ async function getTokenPrice(router, action) {
     }
 
     try {
+        // Convert amount to wei
         const amountIn = ethers.utils.parseEther(amount.toString());
+        
+        // Get WETH address
+        const wethAddress = await router.WETH();
+        console.log(`[INFO] WETH address: ${wethAddress}`);
+        
+        // Prepare path
         const path = [TOKENS[from], TOKENS[to]];
+        console.log(`[INFO] Swap path: ${path.join(' -> ')}`);
+        
+        // Get amounts out
         const amounts = await router.getAmountsOut(amountIn, path);
         
         console.log(`[INFO] Price quote for ${amount} ${from} -> ${to}`);

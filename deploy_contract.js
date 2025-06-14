@@ -1,23 +1,6 @@
 const { ethers } = require("ethers");
 require("dotenv").config();
 
-// Simple storage contract for testing
-const contractSource = `
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
-
-contract SimpleStorage {
-    uint256 private value;
-    
-    function setValue(uint256 _value) public {
-        value = _value;
-    }
-    
-    function getValue() public view returns (uint256) {
-        return value;
-    }
-}`;
-
 // Track deployments per address
 const deploymentCounts = new Map();
 
@@ -27,8 +10,14 @@ async function deployContract(wallet) {
     // Check if address has reached deployment limit
     const currentCount = deploymentCounts.get(address) || 0;
     if (currentCount >= 2) {
-        console.log(`[INFO] Address ${address} has reached maximum deployment limit (2)`);
-        return null;
+        console.log(`\n[ALERT] ALREADY DEPLOYED 2X! TRY AGAIN TOMORROW!`);
+        console.log(`[INFO] Address: ${address}`);
+        console.log(`[INFO] Current deployment count: ${currentCount}/2\n`);
+        return {
+            success: false,
+            error: 'MAX_DEPLOYMENTS_REACHED',
+            message: 'ALREADY DEPLOYED 2X! TRY AGAIN TOMORROW!'
+        };
     }
 
     try {
@@ -40,15 +29,9 @@ async function deployContract(wallet) {
         );
 
         // Deploy contract
-        console.log(`[INFO] Deploying contract from ${address}...`);
+        console.log(`\n[INFO] Deploying contract from ${address}...`);
         console.log(`[INFO] Using playground at https://playground.easy-node.xyz/`);
-        
-        // Get deployment transaction
-        const deployTx = await factory.getDeployTransaction();
-        
-        // Log deployment info
-        console.log(`[INFO] Contract bytecode length: ${deployTx.data.length / 2 - 1} bytes`);
-        console.log(`[INFO] Estimated gas: ${deployTx.gasLimit.toString()}`);
+        console.log(`[INFO] Current deployment count: ${currentCount}/2\n`);
         
         // Deploy through playground
         const contract = await factory.deploy();
@@ -68,22 +51,31 @@ async function deployContract(wallet) {
         // Verify contract is working by calling getValue
         try {
             await contract.getValue();
-            console.log(`[SUCCESS] Contract verified and working at: ${contract.address}`);
+            console.log(`\n[SUCCESS] Contract verified and working at: ${contract.address}`);
             console.log(`[INFO] Transaction hash: ${receipt.transactionHash}`);
             console.log(`[INFO] Block number: ${receipt.blockNumber}`);
             console.log(`[INFO] Gas used: ${receipt.gasUsed.toString()}`);
             
             // Increment deployment count only after successful verification
             deploymentCounts.set(address, currentCount + 1);
-            console.log(`[INFO] Deployment count for ${address}: ${deploymentCounts.get(address)}/2`);
+            console.log(`[INFO] New deployment count: ${deploymentCounts.get(address)}/2\n`);
             
-            return contract.address;
+            return {
+                success: true,
+                contractAddress: contract.address,
+                txHash: receipt.transactionHash,
+                deploymentCount: deploymentCounts.get(address)
+            };
         } catch (error) {
             throw new Error('Contract deployment failed - contract not responding');
         }
     } catch (error) {
-        console.error(`[ERROR] Failed to deploy contract: ${error.message}`);
-        return null;
+        console.error(`\n[ERROR] Failed to deploy contract: ${error.message}`);
+        return {
+            success: false,
+            error: 'DEPLOYMENT_FAILED',
+            message: error.message
+        };
     }
 }
 
