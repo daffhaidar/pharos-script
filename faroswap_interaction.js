@@ -23,22 +23,38 @@ async function interactWithFaroswap(wallet, action) {
     try {
         const router = new ethers.Contract(FAROSWAP_ROUTER, FAROSWAP_ROUTER_ABI, wallet);
         
-        switch(action.type) {
+        if (!action.action) {
+            throw new Error('Action type not specified');
+        }
+
+        switch(action.action) {
             case 'swap':
                 return await performSwap(router, wallet, action);
             case 'getPrice':
                 return await getTokenPrice(router, action);
             default:
-                throw new Error(`Unknown action type: ${action.type}`);
+                throw new Error(`Unknown action type: ${action.action}`);
         }
     } catch (error) {
         console.error(`[ERROR] Faroswap interaction failed: ${error.message}`);
-        return null;
+        return {
+            success: false,
+            error: error.message
+        };
     }
 }
 
 async function performSwap(router, wallet, action) {
     const { from, to, amount } = action;
+    
+    if (!from || !to || !amount) {
+        throw new Error('Missing required parameters for swap');
+    }
+
+    if (!TOKENS[from] || !TOKENS[to]) {
+        throw new Error(`Invalid token pair: ${from} -> ${to}`);
+    }
+
     console.log(`[INFO] Preparing swap: ${amount} ${from} -> ${to}`);
     
     try {
@@ -101,6 +117,15 @@ async function performSwap(router, wallet, action) {
 
 async function getTokenPrice(router, action) {
     const { from, to, amount } = action;
+    
+    if (!from || !to || !amount) {
+        throw new Error('Missing required parameters for price check');
+    }
+
+    if (!TOKENS[from] || !TOKENS[to]) {
+        throw new Error(`Invalid token pair: ${from} -> ${to}`);
+    }
+
     try {
         const amountIn = ethers.utils.parseEther(amount.toString());
         const path = [TOKENS[from], TOKENS[to]];
