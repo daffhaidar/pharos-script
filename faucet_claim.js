@@ -1,81 +1,74 @@
-const { ethers } = require("ethers");
-require("dotenv").config();
+const hre = require("hardhat");
 
-// Track last claim time per address
-const lastClaimTime = new Map();
+// Constants
+const FAUCET_ADDRESS = "0x49f3fd7ca34317d3c44f7947741ae6566cfdb553";
+const FAUCET_ABI = ["function claim() external"];
+const CLAIM_COOLDOWN_HOURS = 24;
 
-async function claimFaucet(wallet) {
-    const address = wallet.address;
-    
-    // Check if 24 hours have passed since last claim
-    const lastClaim = lastClaimTime.get(address) || 0;
-    const now = Date.now();
-    const hoursSinceLastClaim = (now - lastClaim) / (1000 * 60 * 60);
-    
-    if (hoursSinceLastClaim < 24) {
-        const hoursRemaining = (24 - hoursSinceLastClaim).toFixed(2);
-        console.log(`[INFO] Address ${address} needs to wait ${hoursRemaining} more hours before next claim`);
-        return {
-            success: false,
-            message: `Need to wait ${hoursRemaining} more hours`
-        };
+// State management (udah bagus, gak diubah)
+const claimState = {
+    lastClaimTime: new Map(),
+    getLastClaimTime: (address) => claimState.lastClaimTime.get(address) || 0,
+    setLastClaimTime: (address, time) => claimState.lastClaimTime.set(address, time),
+    getHoursSinceLastClaim: (address) => {
+        const lastClaim = claimState.getLastClaimTime(address);
+        return (Date.now() - lastClaim) / (1000 * 60 * 60);
     }
+};
+
+// Validation functions (udah bagus, gak diubah)
+const validators = {
+    isFaucetAddressValid: () => {
+        if (FAUCET_ADDRESS === "0x0000000000000000000000000000000000000000") {
+            console.warn("\n[PERINGATAN] Alamat Faucet masih placeholder (0x000...)!");
+            return false;
+        }
+        return true;
+    },
+    canClaim: (address) => {
+        const hoursSinceLastClaim = claimState.getHoursSinceLastClaim(address);
+        if (hoursSinceLastClaim < CLAIM_COOLDOWN_HOURS) {
+            const hoursRemaining = (CLAIM_COOLDOWN_HOURS - hoursSinceLastClaim).toFixed(2);
+            console.log(`[INFO] Alamat ${address} perlu nunggu ${hoursRemaining} jam lagi.`);
+            return { canClaim: false };
+        }
+        return { canClaim: true };
+    }
+};
+
+// Main claim function
+async function claimFaucet(signer) {
+    const address = signer.address;
+
+    if (!validators.isFaucetAddressValid()) return { success: false };
+    if (!validators.canClaim(address).canClaim) return { success: false };
 
     try {
-        // Create provider for faucet network
-        const provider = new ethers.providers.JsonRpcProvider("https://testnet.dplabs-internal.com");
-        const connectedWallet = wallet.connect(provider);
+        const faucetContract = new hre.ethers.Contract(FAUCET_ADDRESS, FAUCET_ABI, signer);
 
-        // Get current balance before claim
-        const balanceBefore = await provider.getBalance(address);
-        console.log(`[INFO] Balance before claim: ${ethers.utils.formatEther(balanceBefore)} PHRS`);
-
-        // Prepare faucet claim transaction
-        const faucetAddress = "0x0000000000000000000000000000000000000000"; // Replace with actual faucet contract address
-        const faucetABI = [
-            "function claim() external"
-        ];
-        const faucetContract = new ethers.Contract(faucetAddress, faucetABI, connectedWallet);
-
-        // Send claim transaction
-        console.log(`[INFO] Claiming faucet for ${address}...`);
-        const tx = await faucetContract.claim({
-            gasLimit: 200000
-        });
-
-        // Wait for transaction confirmation
-        console.log(`[INFO] Waiting for claim transaction to be mined...`);
+        console.log(`[INFO] Mengirim permintaan klaim ke Faucet untuk ${address}...`);
+        const tx = await faucetContract.claim({ gasLimit: 200000 });
         const receipt = await tx.wait();
 
-        // Get new balance
-        const balanceAfter = await provider.getBalance(address);
-        const claimedAmount = balanceAfter.sub(balanceBefore);
-        
-        // Update last claim time
-        lastClaimTime.set(address, now);
+        // --- [LOGIKA BARU YANG LEBIH JUJUR] ---
+        claimState.setLastClaimTime(address, Date.now());
 
-        console.log(`[SUCCESS] Faucet claimed successfully!`);
-        console.log(`[INFO] Transaction hash: ${receipt.transactionHash}`);
-        console.log(`[INFO] Claimed amount: ${ethers.utils.formatEther(claimedAmount)} PHRS`);
-        console.log(`[INFO] New balance: ${ethers.utils.formatEther(balanceAfter)} PHRS`);
-        console.log(`[INFO] Next claim available in 24 hours`);
+        const gasUsed = receipt.gasUsed;
+        const gasPrice = receipt.effectiveGasPrice; // atau tx.gasPrice
+        const txFee = gasUsed * gasPrice;
 
-        return {
-            success: true,
-            txHash: receipt.transactionHash,
-            claimedAmount: ethers.utils.formatEther(claimedAmount),
-            newBalance: ethers.utils.formatEther(balanceAfter)
-        };
+        console.log(`\n[SUCCESS] Permintaan klaim berhasil dikirim!`);
+        console.log(`[INFO] Hash Transaksi: ${receipt.hash}`);
+        console.log(`[INFO] Biaya Gas Fee: ${hre.ethers.formatEther(txFee)} PHRS`);
+        console.log(`[PENTING] Faucet akan mengirim PHRS dalam transaksi terpisah. Cek saldo beberapa saat lagi.`);
+
+        return { success: true, txHash: receipt.hash };
+        // ------------------------------------
+
     } catch (error) {
-        console.error(`[ERROR] Failed to claim faucet: ${error.message}`);
-        return {
-            success: false,
-            error: error.message
-        };
+        console.error(`[ERROR] Gagal mengirim permintaan klaim: ${error.message}`);
+        return { success: false, error: error.message };
     }
 }
 
-module.exports = {
-    claimFaucet,
-    lastClaimTime
-}; 
+module.exports = { claimFaucet };

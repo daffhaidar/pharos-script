@@ -22,6 +22,11 @@ This script has evolved from a simple faucet into a powerful, all-in-one automat
 - **Fully Configurable**: Easily change the entire bot's behavior—the sequence of actions, swap amounts, transfer counts, and delays—directly within the `config` object at the top of the script.
 - **Randomized Behavior**: Simulates human activity with random delays between transactions and cycles, plus random amounts for each transaction.
 - **Continuous Operation**: Runs in an infinite loop, completing a full cycle for all wallets before starting the next one after a random delay.
+- **Cross-Relay System**: Implements a sophisticated relay system where:
+  - Each wallet executes one step at a time
+  - Wallets are randomly shuffled between steps
+  - Creates a more natural and unpredictable transaction pattern
+  - Reduces network congestion by spreading out transactions
 
 ## Network Information
 
@@ -61,7 +66,7 @@ This script has evolved from a simple faucet into a powerful, all-in-one automat
 
 Run the script:
 ```bash
-node send_faucet.js
+npx hardhat run send_faucet.js --network pharosTestnet
 ```
 
 The script will:
@@ -93,8 +98,8 @@ The script includes several configurable parameters:
   - Automatic token approvals
 
 - **Random amount range**: 0.0012 - 0.0023 PHRS
-- **Transaction delay**: 31 - 61 seconds
-- **Wallet switch delay**: 5 - 10 minutes
+- **Transaction delay**: 11 - 120 seconds
+- **Wallet switch delay**: 5 - 11 minutes
 - **Number of addresses**: 51 (can be modified in the code)
 
 ## Error Handling
@@ -118,3 +123,4 @@ The script includes error handling for:
 - Contract deployments are verified on-chain before counting as successful
 - Faroswap interactions include price checks and slippage protection
 - Faucet claims are tracked per address with 24-hour cooldown
+- The cross-relay system helps prevent network congestion and creates more natural transaction patterns
