@@ -1,4 +1,4 @@
-# Pharos Network Bot 🤖
+# Pharos Network Bot
 
 An automated bot for interacting with Pharos Testnet, performing swaps, transfers, faucet claims, and daily check-ins.
 
@@ -21,7 +21,7 @@ An automated bot for interacting with Pharos Testnet, performing swaps, transfer
 1. Clone the repository:
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/daffhaidar/pharos-script.git
 cd pharos-bot
 ```
 
