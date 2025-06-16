@@ -1,104 +1,41 @@
-# Node.js dependencies
+# =============================================================================
+# THIS FILE TELLS GIT WHICH FILES/FOLDERS TO IGNORE IN YOUR PROJECT
+# =============================================================================
+
+# 1. Dependencies & Tools (MUST BE IGNORED)
+# Contains thousands of small files, makes repo very heavy
 node_modules/
 package-lock.json
-yarn.lock
 
-# Environment variables and secrets
+# 2. Secrets & Private Keys (MUST BE IGNORED!)
+# NEVER UPLOAD THESE TO GITHUB! VERY DANGEROUS!
 .env
-.env.local
-.env.development
-.env.test
-.env.production
 *.env
-
-# Files that might contain private keys
 keys.json
 secrets.json
 credentials.json
 
-# Logs
+# 3. Temporary Files & Logs (Not Important)
 logs
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
-# Editor directories and files
 .idea/
 .vscode/
 *.swp
 *.swo
-
-# OS files
 .DS_Store
-Thumbs.db 
-node_modules
-.env
+Thumbs.db
 
-# Hardhat files
+# 4. Hardhat Generated Files (EXCEPT ARTIFACTS)
+# These are temporary files created by Hardhat, no need to upload
 /cache
-
-# TypeChain files
 /typechain
 /typechain-types
-
-# solidity-coverage files
 /coverage
 /coverage.json
+/ignition/deployments/chain-31337
 
-# Hardhat Ignition default folder for deployments against a local node
-ignition/deployments/chain-31337
-
-node_modules
-.env
-
-# Hardhat files
-/cache
-/artifacts
-
-# TypeChain files
-/typechain
-/typechain-types
-
-# solidity-coverage files
-/coverage
-/coverage.json
-
-# Hardhat Ignition default folder for deployments against a local node
-ignition/deployments/chain-31337
-
-node_modules
-.env
-
-# Hardhat files
-/cache
-/artifacts
-
-# TypeChain files
-/typechain
-/typechain-types
-
-# solidity-coverage files
-/coverage
-/coverage.json
-
-# Hardhat Ignition default folder for deployments against a local node
-ignition/deployments/chain-31337
-
-node_modules
-.env
-
-# Hardhat files
-/cache
-/artifacts
-
-# TypeChain files
-/typechain
-/typechain-types
-
-# solidity-coverage files
-/coverage
-/coverage.json
-
-# Hardhat Ignition default folder for deployments against a local node
-ignition/deployments/chain-31337
+# /artifacts folder is INTENTIONALLY NOT IGNORED, so new users
+# don't need to run 'npx hardhat compile'. They can use it directly.
