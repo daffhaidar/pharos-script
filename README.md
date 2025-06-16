@@ -1,121 +1,110 @@
-# Pharos Network Faucet Script
+# Pharos Network Bot 🤖
 
-This script has evolved from a simple faucet into a powerful, all-in-one automation bot for the Pharos Network. It's designed to run continuously, executing a configurable sequence of operations like token swaps, contract deployments, and batch transfers across an unlimited number of wallets.
+An automated bot for interacting with Pharos Testnet, performing swaps, transfers, faucet claims, and daily check-ins.
 
-## Features
+## Features ✨
 
-- **All-in-One Script**: All logic, configuration, and execution are contained within a single `send_faucet.js` file for maximum portability.
-- **Sequential Operations**: Executes a predefined sequence of tasks including:
-  - Faucet claims (once per 24 hours per address)
-  - Contract deployments (limited to 2 per address)
-  - Price checks and quotes
-  - Batch transfers
-- **Multi-Action Support**: Natively supports complex actions like:
-  - Claiming testnet tokens from faucet
-  - Deploying smart contracts through the playground
-  - Swapping the native coin (PHRS) for tokens
-  - Swapping between different tokens (e.g., USDC to USDT)
-  - Sending PHRS to a large batch of randomly generated addresses
-- **Unlimited Multi-Wallet Support**: Automatically detects and uses all private keys from your `.env` file that start with `PRIVATE_KEY_`.
-- **Fully Configurable**: Easily change the entire bot's behavior—the sequence of actions, swap amounts, transfer counts, and delays—directly within the `config` object at the top of the script.
-- **Randomized Behavior**: Simulates human activity with random delays between transactions and cycles, plus random amounts for each transaction.
-- **Continuous Operation**: Runs in an infinite loop, completing a full cycle for all wallets before starting the next one after a random delay.
-- **Cross-Relay System**: Implements a sophisticated relay system where:
-  - Each wallet executes one step at a time
-  - Wallets are randomly shuffled between steps
-  - Creates a more natural and unpredictable transaction pattern
-  - Reduces network congestion by spreading out transactions
+- **Faucet Claim**: Automatically claim testnet tokens
+- **Token Swap**: Swap between WPHRS and USDC
+- **PHRS Transfer**: Send PHRS to random addresses
+- **Daily Check-in**: Daily check-in for rewards
+- **Multi-wallet Support**: Support for multiple wallets
 
-## Network Information
+## Prerequisites 📋
 
-- **Network Name**: Pharos Testnet
-- **Chain ID**: 688688
-- **RPC URL**: `https://testnet.dplabs-internal.com`
-- **Block Explorer**: `https://testnet.pharosscan.xyz`
-- **Currency Symbol**: PHRS
-- **Contract Playground**: `https://playground.easy-node.xyz`
-- **Faucet**: `https://testnet.pharosnetwork.xyz`
+- Node.js (v18 or higher)
+- npm or yarn
+- Pharos Testnet wallet with private key
 
-## Setup
+## Installation ⚙️
 
-1. **Install dependencies**:
-
-   ```bash
-   git clone https://github.com/daffhaidar/pharos-script.git
-   cd pharos-script
-   npm install
-   ```
-
-2. **Create a `.env` file** in the root directory with your private keys:
-
-   ```env
-   PRIVATE_KEY_1=your_first_private_key
-   PRIVATE_KEY_2=your_second_private_key
-   PRIVATE_KEY_3=your_third_private_key
-   # Add more private keys as needed
-   ```
-
-3. **Ensure sufficient PHRS tokens**: Make sure each wallet has enough PHRS tokens to cover:
-   - Maximum possible distribution (0.0023 PHRS × number of addresses per wallet)
-   - Contract deployment fees (approximately 0.02 PHRS per deployment)
-   - Initial gas for faucet claims
-
-## Usage
-
-Run the script:
+1. Clone the repository:
 
 ```bash
-npx hardhat run send_faucet.js --network pharosTestnet
+git clone <repository-url>
+cd pharos-bot
 ```
 
-The script will:
+2. Install dependencies:
 
-- Claim faucet tokens (once per 24 hours per address)
-- Deploy contracts (limited to 2 per address)
-- Generate 51 random addresses
-- Split these addresses among the available private keys
-- Send random amounts of PHRS tokens to each address
-- Wait random intervals between transactions and wallet switches
+```bash
+npm install
+```
 
-## Configuration
+3. Create a `.env` file in the root directory with your private key:
 
-The script includes several configurable parameters:
+```
+PRIVATE_KEY_1=your_private_key_here
+PRIVATE_KEY_2=your_private_key_here
+PRIVATE_KEY_3=your_private_key_here
+PRIVATE_KEY_4=your_private_key_here
+PRIVATE_KEY_5=your_private_key_here
+# Add more private keys as needed
+```
 
-- **Faucet Claims**:
+## Configuration ⚙️
 
-  - Once per 24 hours per address
-  - Automatic tracking of claim times
-  - Balance checks before and after claims
+The bot uses default settings for Pharos Testnet. You can modify:
 
-- **Contract Deployment**:
+- Network RPC URL in `CONFIG.NETWORK`
+- Contract addresses in `CONFIG.TOKENS` and `CONFIG.DEX`
+- Swap amounts in `CONFIG.SWAP`
+- Transfer amounts in `CONFIG.TRANSFER`
 
-  - Maximum 2 deployments per address
-  - Deployed through playground for cost efficiency
-  - Automatic verification of deployments
+## Usage 🚀
 
-- **Random amount range**: 0.0012 - 0.0023 PHRS
-- **Transaction delay**: 11 - 120 seconds
-- **Wallet switch delay**: 5 - 11 minutes
-- **Number of addresses**: 51 (can be modified in the code)
+Run the bot:
 
-## Error Handling
+```javascript
+node pharos_bot.js
+```
 
-The script includes error handling for:
+The bot will:
 
-- Insufficient wallet balance
-- Transaction failures
-- Network connectivity issues
-- Invalid private keys
-- Contract deployment failures
-- Faucet claim failures
-- 24-hour claim cooldown
+1. Display a banner with project info
+2. Process each wallet sequentially:
+   - Claim faucet (if available)
+   - Perform daily check-in
+   - Execute 10 PHRS transfers
+   - Execute 10 token swaps
+3. Repeat every 30 minutes
 
-## Notes
+## Logging 📝
 
-- Keep your private keys secure and never commit them to version control
-- The script uses the maximum possible amount when checking wallet balances to ensure sufficient funds
-- Each transaction is confirmed before proceeding to the next one
-- The script maintains proper nonce management for each wallet
-- Contract deployments are verified on-chain before counting as successful
-- Faucet claims are tracked per address with 24-hour cooldown
-- The cross-relay system helps prevent network congestion and creates more natural transaction patterns
+The bot provides color-coded logs:
+
+- ✅ Success messages (green)
+- ⚠️ Warnings (yellow)
+- ❌ Errors (red)
+- 🔄 Loading/process indicators (cyan)
+- ➤ Step-by-step actions (white)
+
+## Important Notes ⚠️
+
+1. This bot is for TESTNET use only
+2. Never use mainnet private keys
+3. The bot runs indefinitely until stopped (Ctrl+C)
+4. All transactions use 0 gas price (testnet feature)
+5. The bot includes random delays between operations
+
+## Code Structure 📁
+
+```
+pharos_bot/
+├── pharos_bot.js      # Main bot file
+├── .env              # Private key configuration
+├── package.json      # Dependencies
+└── README.md         # Documentation
+```
+
+## Contributing 🤝
+
+Feel free to make pull requests for contributions. For major changes, please open an issue first to discuss what you would like to change.
+
+## License 📄
+
+MIT License - See LICENSE file for details
+
+## Disclaimer ⚠️
+
+This software is provided "as is" without warranties. Use at your own risk. The developers are not responsible for any losses or issues caused by using this bot.
