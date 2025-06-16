@@ -22,7 +22,7 @@ An automated bot for interacting with Pharos Testnet, performing swaps, transfer
 
 ```bash
 git clone https://github.com/daffhaidar/pharos-script.git
-cd pharos-bot
+cd pharos-script
 ```
 
 2. Install dependencies:
@@ -55,7 +55,7 @@ The bot uses default settings for Pharos Testnet. You can modify:
 
 Run the bot:
 
-```javascript
+```
 node pharos_bot.js
 ```
 
