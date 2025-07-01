@@ -22,6 +22,11 @@ const config = {
     betweenCyclesMinutes: { min: 5, max: 11 },
     betweenMicroTasksSeconds: { min: 11, max: 120 },
   },
+  // [JURUS BARU] Konfigurasi buat "Jurus Sabar"
+  retry: {
+    attempts: 3, // Coba lagi maksimal 3 kali kalo gagal
+    delaySeconds: 15, // Jeda antar percobaan 15 detik
+  },
   rpcUrl: "https://testnet.dplabs-internal.com",
   proxies: fs.existsSync("proxies.txt")
     ? fs
@@ -59,7 +64,6 @@ const utils = {
     }
     return newArray;
   },
-  // [FIX TERAKHIR] Fungsi buat bikin "dokumen palsu" biar gak diusir satpam API
   createApiHeaders: (jwt = null) => {
     const headers = {
       accept: "application/json, text/plain, */*",
@@ -74,10 +78,29 @@ const utils = {
       "Referrer-Policy": "strict-origin-when-cross-origin",
       "User-Agent": randomUseragent.getRandom(),
     };
-    if (jwt) {
-      headers["Authorization"] = `Bearer ${jwt}`;
-    }
+    if (jwt) headers["Authorization"] = `Bearer ${jwt}`;
     return headers;
+  },
+  // [JURUS BARU] Jurus sabar buat ngadepin server error
+  async retryOperation(operation, attempts, delay) {
+    for (let i = 0; i < attempts; i++) {
+      try {
+        return await operation();
+      } catch (error) {
+        if (i < attempts - 1) {
+          const isRetryableError = (error.isAxiosError && error.response && error.response.status >= 500) || error.code === "SERVER_ERROR" || error.code === "NETWORK_ERROR" || (error.message && error.message.includes("INTERNAL_ERROR"));
+          if (isRetryableError) {
+            Logger.warn(`Operasi gagal (percobaan ${i + 1}/${attempts}): ${error.message}. Coba lagi dalam ${delay} detik...`);
+            await new Promise((res) => setTimeout(res, delay * 1000));
+          } else {
+            throw error; // Kalo bukan error server, jangan di-retry
+          }
+        } else {
+          Logger.error(`Operasi gagal permanen setelah ${attempts} kali percobaan.`);
+          throw error; // Kalo udah mentok, lempar errornya
+        }
+      }
+    }
   },
 };
 
@@ -85,38 +108,30 @@ const utils = {
 // BAGIAN 4: SEMUA AKSI BOT (KUMPULAN FUNGSI "PEKERJA")
 // =============================================================================
 
-/**
- * FUNGSI KLAIM FAUCET (VERSI API FINAL)
- * Dandanannya paling lengkap biar gak diusir satpam.
- */
 async function claimFaucet(wallet, proxy) {
   const address = wallet.address;
   Logger.step(address, `Memulai proses klaim Faucet via API...`);
   try {
     const signature = await wallet.signMessage("pharos");
     const loginUrl = `https://api.pharosnetwork.xyz/user/login?address=${address}&signature=${signature}&invite_code=S6NGMzXSCDBxhnwo`;
-
-    // [FIX] Pake "dokumen palsu" lengkap pas login
     const loginHeaders = utils.createApiHeaders();
     const axiosConfig = { headers: loginHeaders, httpsAgent: proxy ? new HttpsProxyAgent(proxy) : null };
     const loginResponse = await axios.post(loginUrl, {}, axiosConfig);
 
     if (loginResponse.data.code !== 0 || !loginResponse.data.data.jwt) {
       Logger.warn(`Login Faucet Gagal: ${loginResponse.data.msg || "Tidak ada token JWT diterima"}`);
-      return { success: false };
+      return { success: false }; // Gagal logis, jangan di-retry
     }
     const jwt = loginResponse.data.data.jwt;
 
-    // [FIX] Pake "dokumen palsu" + stempel JWT pas cek status & klaim
     const authHeaders = utils.createApiHeaders(jwt);
     const authAxiosConfig = { headers: authHeaders, httpsAgent: proxy ? new HttpsProxyAgent(proxy) : null };
-
     const statusUrl = `https://api.pharosnetwork.xyz/faucet/status?address=${address}`;
     const statusResponse = await axios.get(statusUrl, authAxiosConfig);
 
     if (!statusResponse.data.data.is_able_to_faucet) {
       Logger.info(`Faucet untuk ${address.slice(0, 8)}... masih cooldown.`);
-      return { success: false };
+      return { success: false }; // Gagal logis, jangan di-retry
     }
 
     const claimUrl = `https://api.pharosnetwork.xyz/faucet/daily?address=${address}`;
@@ -127,18 +142,14 @@ async function claimFaucet(wallet, proxy) {
       return { success: true };
     } else {
       Logger.warn(`Klaim Faucet Gagal: ${claimResponse.data.msg || "Error tidak diketahui"}`);
-      return { success: false };
+      return { success: false }; // Gagal logis, jangan di-retry
     }
   } catch (error) {
     Logger.error(`Proses klaim faucet error: ${error.message}`);
-    return { success: false };
+    throw error; // Lempar error biar ditangkep sama retryOperation
   }
 }
 
-/**
- * FUNGSI DEPLOY KONTRAK (VERSI FINAL)
- * Udah ada pengecekan artifact, dll.
- */
 async function deployContract(wallet) {
   const address = wallet.address;
   const countsFilePath = path.join(__dirname, "deployment_counts.json");
@@ -149,53 +160,57 @@ async function deployContract(wallet) {
   const currentCount = allCounts[address] || 0;
   if (currentCount >= 2) {
     Logger.info(`Dompet ${address.slice(0, 8)}... sudah mencapai limit deploy (2x).`);
-    return { success: false };
+    return { success: true }; // Anggap sukses biar bot lanjut
   }
 
   Logger.step(address, `Memulai deployment ke-${currentCount + 1}...`);
   try {
     const artifactPath = "./artifacts/contracts/MyContract.sol/MyContract.json";
     if (!fs.existsSync(artifactPath)) throw new Error("Artifact kontrak tidak ditemukan! Jalankan 'npx hardhat compile' dulu.");
-
     const contractArtifact = require(artifactPath);
     const factory = new ethers.ContractFactory(contractArtifact.abi, contractArtifact.bytecode, wallet);
     const myContract = await factory.deploy();
     await myContract.waitForDeployment();
-
     allCounts[address] = currentCount + 1;
     writeCounts(allCounts);
     Logger.info(`Deploy BERHASIL! Alamat kontrak baru: ${(await myContract.getAddress()).slice(0, 12)}...`);
     return { success: true };
   } catch (error) {
     Logger.error(`Proses deploy gagal: ${error.message}`);
-    return { success: false };
+    throw error; // Lempar error biar ditangkep sama retryOperation
   }
 }
 
-/**
- * FUNGSI TRANSFER BATCH (VERSI FINAL)
- * Udah ada pengecekan saldo sebelum kirim.
- */
 async function performBatchTransfer(wallet, count) {
   Logger.step(wallet.address, `Memulai transfer batch ke ${count} alamat acak.`);
   for (let i = 0; i < count; i++) {
-    const toAddress = ethers.Wallet.createRandom().address;
-    const amount = utils.generateRandomAmount(config.transactions.amountRange.min, config.transactions.amountRange.max);
     try {
-      const amountIn = ethers.parseEther(amount);
-      const balance = await wallet.provider.getBalance(wallet.address);
-      if (balance < amountIn) {
-        Logger.warn(`Saldo tidak cukup untuk transfer batch, berhenti di transfer ke-${i + 1}.`);
-        return { success: false };
-      }
-      const tx = await wallet.sendTransaction({ to: toAddress, value: amountIn });
-      await tx.wait();
-      Logger.info(`Transfer ${i + 1}/${count} ke ${toAddress.slice(0, 8)}... BERHASIL.`);
-      await utils.randomDelay(1, 5);
+      await utils.retryOperation(
+        async () => {
+          const toAddress = ethers.Wallet.createRandom().address;
+          const amount = utils.generateRandomAmount(config.transactions.amountRange.min, config.transactions.amountRange.max);
+          const amountIn = ethers.parseEther(amount);
+          const balance = await wallet.provider.getBalance(wallet.address);
+          if (balance < amountIn) {
+            throw new Error("INSUFFICIENT_FUNDS_FOR_BATCH");
+          }
+          Logger.info(`   -> Transfer ${i + 1}/${count}: Mengirim ${amount} PHRS ke ${toAddress.slice(0, 8)}...`);
+          const tx = await wallet.sendTransaction({ to: toAddress, value: amountIn });
+          await tx.wait();
+          Logger.info(`   -> Transfer ke ${toAddress.slice(0, 8)}... BERHASIL.`);
+        },
+        config.retry.attempts,
+        config.retry.delaySeconds
+      );
     } catch (error) {
-      Logger.error(`Transfer ${i + 1}/${count} gagal: ${error.message}`);
-      continue;
+      if (error.message === "INSUFFICIENT_FUNDS_FOR_BATCH") {
+        Logger.warn(`Saldo tidak cukup untuk transfer. Menghentikan batch.`);
+        break;
+      } else {
+        Logger.error(`Transfer ${i + 1}/${count} gagal permanen.`);
+      }
     }
+    if (i < count - 1) await utils.randomDelay(1, 5);
   }
   return { success: true };
 }
@@ -222,21 +237,25 @@ class Bot {
     const step = config.sequence[this.currentStepIndex];
     Logger.step(this.address, `Langkah ${this.currentStepIndex + 1}/${config.sequence.length}: ${step.type.toUpperCase()}`);
     try {
-      switch (step.type) {
-        case "claim_faucet":
-          await claimFaucet(this.wallet, this.proxy);
-          break;
-        case "deploy_contract":
-          await deployContract(this.wallet);
-          break;
-        case "transfer_batch":
-          await performBatchTransfer(this.wallet, step.count);
-          break;
-        default:
-          Logger.warn(`Tipe langkah tidak dikenal: ${step.type}`);
-      }
+      await utils.retryOperation(
+        async () => {
+          switch (step.type) {
+            case "claim_faucet":
+              return await claimFaucet(this.wallet, this.proxy);
+            case "deploy_contract":
+              return await deployContract(this.wallet);
+            case "transfer_batch":
+              return await performBatchTransfer(this.wallet, step.count);
+            default:
+              Logger.warn(`Tipe langkah tidak dikenal: ${step.type}`);
+              return { success: true };
+          }
+        },
+        config.retry.attempts,
+        config.retry.delaySeconds
+      );
     } catch (error) {
-      Logger.error(`Gagal di langkah ${step.type}: ${error.message}`);
+      Logger.error(`Gagal permanen di langkah ${step.type} untuk dompet ${this.address.slice(0, 8)}...`);
     }
     this.currentStepIndex++;
   }
