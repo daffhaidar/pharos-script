@@ -93,7 +93,8 @@ const utils = {
             Logger.warn(`Operasi gagal (percobaan ${i + 1}/${attempts}): ${error.message}. Coba lagi dalam ${delay} detik...`);
             await new Promise((res) => setTimeout(res, delay * 1000));
           } else {
-            throw error; // Kalo bukan error server, jangan di-retry
+            // Kalo bukan error server (misal cooldown), jangan di-retry, langsung lempar error
+            throw error;
           }
         } else {
           Logger.error(`Operasi gagal permanen setelah ${attempts} kali percobaan.`);
@@ -120,7 +121,8 @@ async function claimFaucet(wallet, proxy) {
 
     if (loginResponse.data.code !== 0 || !loginResponse.data.data.jwt) {
       Logger.warn(`Login Faucet Gagal: ${loginResponse.data.msg || "Tidak ada token JWT diterima"}`);
-      return { success: false }; // Gagal logis, jangan di-retry
+      // Ini bukan error server, jadi jangan lempar error, cukup return status gagal
+      return { success: false };
     }
     const jwt = loginResponse.data.data.jwt;
 
@@ -131,7 +133,7 @@ async function claimFaucet(wallet, proxy) {
 
     if (!statusResponse.data.data.is_able_to_faucet) {
       Logger.info(`Faucet untuk ${address.slice(0, 8)}... masih cooldown.`);
-      return { success: false }; // Gagal logis, jangan di-retry
+      return { success: false };
     }
 
     const claimUrl = `https://api.pharosnetwork.xyz/faucet/daily?address=${address}`;
@@ -142,11 +144,11 @@ async function claimFaucet(wallet, proxy) {
       return { success: true };
     } else {
       Logger.warn(`Klaim Faucet Gagal: ${claimResponse.data.msg || "Error tidak diketahui"}`);
-      return { success: false }; // Gagal logis, jangan di-retry
+      return { success: false };
     }
   } catch (error) {
-    Logger.error(`Proses klaim faucet error: ${error.message}`);
-    throw error; // Lempar error biar ditangkep sama retryOperation
+    // Kalo ada error jaringan/server, lempar biar ditangkep sama retryOperation
+    throw error;
   }
 }
 
@@ -176,8 +178,8 @@ async function deployContract(wallet) {
     Logger.info(`Deploy BERHASIL! Alamat kontrak baru: ${(await myContract.getAddress()).slice(0, 12)}...`);
     return { success: true };
   } catch (error) {
-    Logger.error(`Proses deploy gagal: ${error.message}`);
-    throw error; // Lempar error biar ditangkep sama retryOperation
+    // Lempar error biar ditangkep sama retryOperation
+    throw error;
   }
 }
 
@@ -192,6 +194,7 @@ async function performBatchTransfer(wallet, count) {
           const amountIn = ethers.parseEther(amount);
           const balance = await wallet.provider.getBalance(wallet.address);
           if (balance < amountIn) {
+            // Ini bukan error server, jadi lempar error khusus
             throw new Error("INSUFFICIENT_FUNDS_FOR_BATCH");
           }
           Logger.info(`   -> Transfer ${i + 1}/${count}: Mengirim ${amount} PHRS ke ${toAddress.slice(0, 8)}...`);
@@ -205,8 +208,9 @@ async function performBatchTransfer(wallet, count) {
     } catch (error) {
       if (error.message === "INSUFFICIENT_FUNDS_FOR_BATCH") {
         Logger.warn(`Saldo tidak cukup untuk transfer. Menghentikan batch.`);
-        break;
+        break; // Keluar dari loop for
       } else {
+        // Kalo errornya bukan saldo abis, berarti error jaringan/RPC
         Logger.error(`Transfer ${i + 1}/${count} gagal permanen.`);
       }
     }
@@ -237,6 +241,7 @@ class Bot {
     const step = config.sequence[this.currentStepIndex];
     Logger.step(this.address, `Langkah ${this.currentStepIndex + 1}/${config.sequence.length}: ${step.type.toUpperCase()}`);
     try {
+      // Bungkus setiap aksi dengan jurus sabar
       await utils.retryOperation(
         async () => {
           switch (step.type) {
